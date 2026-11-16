@@ -1,0 +1,54 @@
+name: Publish existing game catalogue
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: szollosie11-lab/apps-obuvstonozka
+          ref: main
+          path: site
+          persist-credentials: false
+      - name: Adapt domain only; keep original site intact
+        shell: python
+        run: |
+          from pathlib import Path
+          import shutil
+          root = Path('site')
+          shutil.rmtree(root / '.git')
+          for p in root.rglob('*'):
+              if p.is_file() and p.suffix.lower() in {'.html', '.js', '.json', '.xml', '.txt', '.css', '.svg'}:
+                  text = p.read_text(encoding='utf-8')
+                  updated = text.replace('https://apps.obuvstonozka.eu', 'https://mindli.fun')
+                  if updated != text:
+                      p.write_text(updated, encoding='utf-8')
+          (root / 'CNAME').write_text('mindli.fun\n', encoding='utf-8')
+          (root / '.nojekyll').touch()
+          assert (root / 'index.html').is_file()
+          assert (root / 'app-ads.txt').is_file()
+          assert (root / 'play/index.html').is_file()
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment
